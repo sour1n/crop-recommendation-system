@@ -208,6 +208,33 @@
     </footer>
 
     <script>
+    // Crop mapping based on standard dataset encoding
+    // (Update these names if your dataset classes are ordered differently)
+    const cropMap = {
+        0: 'apple',
+        1: 'banana',
+        2: 'blackgram',
+        3: 'chickpea',
+        4: 'coconut',
+        5: 'coffee',
+        6: 'cotton',
+        7: 'grapes',
+        8: 'jute',
+        9: 'kidneybeans',
+        10: 'lentil',
+        11: 'maize',
+        12: 'mango',
+        13: 'mothbeans',
+        14: 'mungbean',
+        15: 'muskmelon',
+        16: 'orange',
+        17: 'papaya',
+        18: 'pigeonpeas',
+        19: 'pomegranate',
+        20: 'rice',
+        21: 'watermelon'
+    };
+
     async function handleFormSubmit(event) {
         event.preventDefault();
 
@@ -226,29 +253,24 @@
         resultBox.style.display = "block";
 
         try {
-            // Load ONNX model session
             const session = await ort.InferenceSession.create('./crop_model.onnx');
-
-            // Find the exact input tensor name dynamically
             const inputName = session.inputNames[0];
 
-            // Construct Float32 input tensor
             const inputData = Float32Array.from([n, p, k, temp, humidity, ph, rainfall]);
             const tensor = new ort.Tensor('float32', inputData, [1, 7]);
 
-            // Map inputs
             const feeds = {};
             feeds[inputName] = tensor;
 
-            // Find the predicted label output name (usually session.outputNames[0] or 'label')
             const labelOutputName = session.outputNames[0];
-
-            // Run inference specifying ONLY the label output name to bypass sequence/map outputs
             const results = await session.run(feeds, [labelOutputName]);
 
-            // Extract the predicted crop name
-            const predictedCrop = results[labelOutputName].data[0];
-            resultText.innerText = predictedCrop;
+            const predictedValue = results[labelOutputName].data[0];
+
+            // Convert numeric predicted class to crop name if mapped, else fallback to value
+            const cropName = cropMap[predictedValue] || predictedValue;
+
+            resultText.innerText = cropName;
 
         } catch (error) {
             console.error("ONNX Inference Error:", error);
