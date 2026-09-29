@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crop Recommendation System</title>
+    <!-- ONNX Runtime Web Engine -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <style>
         :root {
             --primary-color: #2e7d32;
@@ -156,27 +158,27 @@
                     </div>
 
                     <div class="input-group">
-                        <label for="potassium">Potassium (K)[cite: 1]</label>
+                        <label for="potassium">Potassium (K)</label>
                         <input type="number" step="any" id="potassium" placeholder="e.g., 43" required>
                     </div>
 
                     <div class="input-group">
-                        <label for="temperature">Temperature (°C)[cite: 1]</label>
+                        <label for="temperature">Temperature (°C)</label>
                         <input type="number" step="any" id="temperature" placeholder="e.g., 20.8" required>
                     </div>
 
                     <div class="input-group">
-                        <label for="humidity">Humidity (%)[cite: 1]</label>
+                        <label for="humidity">Humidity (%)</label>
                         <input type="number" step="any" id="humidity" placeholder="e.g., 82.0" required>
                     </div>
 
                     <div class="input-group">
-                        <label for="ph">pH Value[cite: 1]</label>
+                        <label for="ph">pH Value</label>
                         <input type="number" step="any" id="ph" placeholder="e.g., 6.5" required>
                     </div>
 
                     <div class="input-group">
-                        <label for="rainfall">Rainfall (mm)[cite: 1]</label>
+                        <label for="rainfall">Rainfall (mm)</label>
                         <input type="number" step="any" id="rainfall" placeholder="e.g., 202.9" required>
                     </div>
 
@@ -186,17 +188,17 @@
 
             <div id="result" class="result-box">
                 <h3>Recommended Crop:</h3>
-                <p id="recommendedCropText" style="font-size: 1.3rem; font-weight: bold; margin: 0;"></p>
+                <p id="recommendedCropText" style="font-size: 1.4rem; font-weight: bold; margin: 0; color: #1b5e20; text-transform: capitalize;"></p>
             </div>
         </div>
 
         <!-- Project Info Section -->
         <div class="card">
             <h2>About Project</h2>
-            <p>This application analyzes soil composition (N, P, K ratios) alongside local climatic metrics (temperature, humidity, pH, and rainfall) to recommend the most suitable crop for cultivation[cite: 1].</p>
+            <p>This application analyzes soil composition (N, P, K ratios) alongside local climatic metrics to recommend the most suitable crop for cultivation.</p>
             <ul>
-                <li><strong>Dataset:</strong> Includes multi-attribute environmental data across multiple crop species (`Crop1.csv`)[cite: 1].</li>
-                <li><strong>Model Training:</strong> Evaluated using Python machine learning models within Jupyter/Google Colab notebooks.</li>
+                <li><strong>Dataset:</strong> Includes multi-attribute environmental data across multiple crop species (<code>Crop1.csv</code>).</li>
+                <li><strong>Model Inference:</strong> Powered client-side using ONNX Runtime Web.</li>
             </ul>
         </div>
     </div>
@@ -206,44 +208,43 @@
     </footer>
 
     <script>
-        function handleFormSubmit(event) {
+        async function handleFormSubmit(event) {
             event.preventDefault();
-            
-            // Retrieve input values
-            const n = document.getElementById('nitrogen').value;
-            const p = document.getElementById('phosphorus').value;
-            const k = document.getElementById('potassium').value;
-            const temp = document.getElementById('temperature').value;
-            const humidity = document.getElementById('humidity').value;
-            const ph = document.getElementById('ph').value;
-            const rainfall = document.getElementById('rainfall').value;
 
-            // Display temporary prediction state
-            // Note: Update API_ENDPOINT when hosting a backend model on Render or Railway
+            const n = parseFloat(document.getElementById('nitrogen').value);
+            const p = parseFloat(document.getElementById('phosphorus').value);
+            const k = parseFloat(document.getElementById('potassium').value);
+            const temp = parseFloat(document.getElementById('temperature').value);
+            const humidity = parseFloat(document.getElementById('humidity').value);
+            const ph = parseFloat(document.getElementById('ph').value);
+            const rainfall = parseFloat(document.getElementById('rainfall').value);
+
             const resultBox = document.getElementById('result');
             const resultText = document.getElementById('recommendedCropText');
-            
-            resultText.innerText = "Processing inputs...";
+
+            resultText.innerText = "Analyzing parameters...";
             resultBox.style.display = "block";
 
-            /* 
-               Backend API Fetch Call Example:
-               
-               fetch('YOUR_BACKEND_API_URL/predict', {
-                   method: 'POST',
-                   headers: { 'Content-Type': 'application/json' },
-                   body: JSON.stringify({ n, p, k, temp, humidity, ph, rainfall })
-               })
-               .then(res => res.json())
-               .then(data => {
-                   resultText.innerText = data.recommended_crop;
-               });
-            */
+            try {
+                // Load ONNX model
+                const session = await ort.InferenceSession.create('./crop_model.onnx');
 
-            // Visual feedback simulation for static hosting
-            setTimeout(() => {
-                resultText.innerText = `Inputs logged successfully! (N:${n}, P:${p}, K:${k})`;
-            }, 600);
+                // Create Float32 input tensor matching shape [1, 7]
+                const inputData = Float32Array.from([n, p, k, temp, humidity, ph, rainfall]);
+                const tensor = new ort.Tensor('float32', inputData, [1, 7]);
+
+                // Run model inference
+                const feeds = { float_input: tensor };
+                const results = await session.run(feeds);
+
+                // Display predicted label
+                const outputLabel = results.label.data[0];
+                resultText.innerText = outputLabel;
+
+            } catch (error) {
+                console.error("ONNX Inference Error:", error);
+                resultText.innerText = "Error making prediction. Check browser console.";
+            }
         }
     </script>
 </body>
