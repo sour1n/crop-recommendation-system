@@ -1,251 +1,49 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crop Recommendation System</title>
-    <!-- ONNX Runtime Web Engine -->
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-    <style>
-        :root {
-            --primary-color: #2e7d32;
-            --primary-hover: #1b5e20;
-            --bg-color: #f4f6f8;
-            --card-bg: #ffffff;
-            --text-color: #333333;
+<script>
+    async function handleFormSubmit(event) {
+        event.preventDefault();
+
+        const n = parseFloat(document.getElementById('nitrogen').value);
+        const p = parseFloat(document.getElementById('phosphorus').value);
+        const k = parseFloat(document.getElementById('potassium').value);
+        const temp = parseFloat(document.getElementById('temperature').value);
+        const humidity = parseFloat(document.getElementById('humidity').value);
+        const ph = parseFloat(document.getElementById('ph').value);
+        const rainfall = parseFloat(document.getElementById('rainfall').value);
+
+        const resultBox = document.getElementById('result');
+        const resultText = document.getElementById('recommendedCropText');
+
+        resultText.innerText = "Analyzing parameters...";
+        resultBox.style.display = "block";
+
+        try {
+            // Load ONNX model session
+            const session = await ort.InferenceSession.create('./crop_model.onnx');
+
+            // Find the exact input tensor name dynamically
+            const inputName = session.inputNames[0];
+
+            // Construct Float32 input tensor
+            const inputData = Float32Array.from([n, p, k, temp, humidity, ph, rainfall]);
+            const tensor = new ort.Tensor('float32', inputData, [1, 7]);
+
+            // Map inputs
+            const feeds = {};
+            feeds[inputName] = tensor;
+
+            // Find the predicted label output name (usually session.outputNames[0] or 'label')
+            const labelOutputName = session.outputNames[0];
+
+            // Run inference specifying ONLY the label output name to bypass sequence/map outputs
+            const results = await session.run(feeds, [labelOutputName]);
+
+            // Extract the predicted crop name
+            const predictedCrop = results[labelOutputName].data[0];
+            resultText.innerText = predictedCrop;
+
+        } catch (error) {
+            console.error("ONNX Inference Error:", error);
+            resultText.innerText = "Error evaluating model. Check console details.";
         }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 0;
-        }
-
-        header {
-            background-color: var(--primary-color);
-            color: white;
-            padding: 2rem 1rem;
-            text-align: center;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        header h1 {
-            margin: 0;
-            font-size: 2.2rem;
-        }
-
-        header p {
-            margin-top: 0.5rem;
-            font-weight: 300;
-            opacity: 0.9;
-        }
-
-        .container {
-            max-width: 900px;
-            margin: 2rem auto;
-            padding: 0 1rem;
-        }
-
-        .card {
-            background-color: var(--card-bg);
-            border-radius: 8px;
-            padding: 2rem;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-            margin-bottom: 2rem;
-        }
-
-        h2 {
-            color: var(--primary-color);
-            margin-top: 0;
-            border-bottom: 2px solid #e0e0e0;
-            padding-bottom: 0.5rem;
-        }
-
-        .grid-form {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 1.2rem;
-            margin-top: 1.5rem;
-        }
-
-        .input-group {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .input-group label {
-            font-weight: 600;
-            margin-bottom: 0.4rem;
-            font-size: 0.9rem;
-        }
-
-        .input-group input {
-            padding: 0.6rem 0.8rem;
-            border: 1px solid #cccccc;
-            border-radius: 4px;
-            font-size: 1rem;
-            transition: border-color 0.2s;
-        }
-
-        .input-group input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-        }
-
-        button.btn-submit {
-            grid-column: 1 / -1;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 0.9rem;
-            font-size: 1.1rem;
-            font-weight: bold;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            margin-top: 1rem;
-        }
-
-        button.btn-submit:hover {
-            background-color: var(--primary-hover);
-        }
-
-        .result-box {
-            display: none;
-            margin-top: 1.5rem;
-            padding: 1rem 1.5rem;
-            background-color: #e8f5e9;
-            border-left: 5px solid var(--primary-color);
-            border-radius: 4px;
-        }
-
-        .result-box h3 {
-            margin: 0 0 0.5rem 0;
-            color: var(--primary-color);
-        }
-
-        footer {
-            text-align: center;
-            padding: 1.5rem;
-            font-size: 0.9rem;
-            color: #666666;
-        }
-    </style>
-</head>
-<body>
-
-    <header>
-        <h1>Crop Recommendation System</h1>
-        <p>Predict optimal crops based on soil nutrients and climate conditions</p>
-    </header>
-
-    <div class="container">
-        <!-- Input Form Section -->
-        <div class="card">
-            <h2>Soil & Climate Parameters</h2>
-            <form id="predictionForm" onsubmit="handleFormSubmit(event)">
-                <div class="grid-form">
-                    <div class="input-group">
-                        <label for="nitrogen">Nitrogen (N)</label>
-                        <input type="number" step="any" id="nitrogen" placeholder="e.g., 90" required>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="phosphorus">Phosphorus (P)</label>
-                        <input type="number" step="any" id="phosphorus" placeholder="e.g., 42" required>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="potassium">Potassium (K)</label>
-                        <input type="number" step="any" id="potassium" placeholder="e.g., 43" required>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="temperature">Temperature (°C)</label>
-                        <input type="number" step="any" id="temperature" placeholder="e.g., 20.8" required>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="humidity">Humidity (%)</label>
-                        <input type="number" step="any" id="humidity" placeholder="e.g., 82.0" required>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="ph">pH Value</label>
-                        <input type="number" step="any" id="ph" placeholder="e.g., 6.5" required>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="rainfall">Rainfall (mm)</label>
-                        <input type="number" step="any" id="rainfall" placeholder="e.g., 202.9" required>
-                    </div>
-
-                    <button type="submit" class="btn-submit">Predict Suitable Crop</button>
-                </div>
-            </form>
-
-            <div id="result" class="result-box">
-                <h3>Recommended Crop:</h3>
-                <p id="recommendedCropText" style="font-size: 1.4rem; font-weight: bold; margin: 0; color: #1b5e20; text-transform: capitalize;"></p>
-            </div>
-        </div>
-
-        <!-- Project Info Section -->
-        <div class="card">
-            <h2>About Project</h2>
-            <p>This application analyzes soil composition (N, P, K ratios) alongside local climatic metrics to recommend the most suitable crop for cultivation.</p>
-            <ul>
-                <li><strong>Dataset:</strong> Includes multi-attribute environmental data across multiple crop species (<code>Crop1.csv</code>).</li>
-                <li><strong>Model Inference:</strong> Powered client-side using ONNX Runtime Web.</li>
-            </ul>
-        </div>
-    </div>
-
-    <footer>
-        <p>Machine Learning & Web Deployment Demo</p>
-    </footer>
-
-    <script>
-        async function handleFormSubmit(event) {
-            event.preventDefault();
-
-            const n = parseFloat(document.getElementById('nitrogen').value);
-            const p = parseFloat(document.getElementById('phosphorus').value);
-            const k = parseFloat(document.getElementById('potassium').value);
-            const temp = parseFloat(document.getElementById('temperature').value);
-            const humidity = parseFloat(document.getElementById('humidity').value);
-            const ph = parseFloat(document.getElementById('ph').value);
-            const rainfall = parseFloat(document.getElementById('rainfall').value);
-
-            const resultBox = document.getElementById('result');
-            const resultText = document.getElementById('recommendedCropText');
-
-            resultText.innerText = "Analyzing parameters...";
-            resultBox.style.display = "block";
-
-            try {
-                // Load ONNX model
-                const session = await ort.InferenceSession.create('./crop_model.onnx');
-
-                // Create Float32 input tensor matching shape [1, 7]
-                const inputData = Float32Array.from([n, p, k, temp, humidity, ph, rainfall]);
-                const tensor = new ort.Tensor('float32', inputData, [1, 7]);
-
-                // Run model inference
-                const feeds = { float_input: tensor };
-                const results = await session.run(feeds);
-
-                // Display predicted label
-                const outputLabel = results.label.data[0];
-                resultText.innerText = outputLabel;
-
-            } catch (error) {
-                console.error("ONNX Inference Error:", error);
-                resultText.innerText = "Error making prediction. Check browser console.";
-            }
-        }
-    </script>
-</body>
-</html>
+    }
+</script>
